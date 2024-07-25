@@ -1,0 +1,122 @@
+import discord
+from discord.ext import commands
+
+# Your Discord bot token
+DISCORD_TOKEN = 'BOT TOKEN'
+
+# Set up Discord bot with intents
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='!', intents=intents)
+
+# In-memory task storage
+tasks = {}
+
+# ID of the user who can use commands without prefix
+NO_PREFIX_USER_ID = 'NO PREFIX USER ID'
+
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user}')
+
+# Command to add a task
+@bot.command()
+async def addtask(ctx, *, task_description):
+    user_id = str(ctx.author.id)
+    if user_id not in tasks:
+        tasks[user_id] = []
+    tasks[user_id].append({"description": task_description, "complete": False})
+
+    embed = discord.Embed(
+        title="Task Added!",
+        description=f"**Task:** {task_description}",
+        color=discord.Color.green()
+    )
+    embed.set_thumbnail(url="https://media.giphy.com/media/26BRrSvJUa0crqw4E/giphy.gif")
+    await ctx.send(embed=embed)
+
+# Command to list tasks
+@bot.command()
+async def listtasks(ctx):
+    user_id = str(ctx.author.id)
+    if user_id not in tasks or len(tasks[user_id]) == 0:
+        embed = discord.Embed(
+            title="No Tasks Found",
+            description="You currently have no tasks.",
+            color=discord.Color.red()
+        )
+        embed.set_thumbnail(url="https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif")
+        await ctx.send(embed=embed)
+    else:
+        task_list = tasks[user_id]
+        task_descriptions = [f"{i+1}. {task['description']} [{'Complete' if task['complete'] else 'Incomplete'}]" for i, task in enumerate(task_list)]
+
+        embed = discord.Embed(
+            title="Your Tasks",
+            description="\n".join(task_descriptions),
+            color=discord.Color.blue()
+        )
+        embed.set_thumbnail(url="https://media.giphy.com/media/xTiTnEcelJodG9CQre/giphy.gif")
+        await ctx.send(embed=embed)
+
+# Command to mark a task as complete
+@bot.command()
+async def completetask(ctx, task_index: int):
+    user_id = str(ctx.author.id)
+    if user_id in tasks and 0 <= task_index-1 < len(tasks[user_id]):
+        tasks[user_id][task_index-1]['complete'] = True
+
+        embed = discord.Embed(
+            title="Task Completed!",
+            description=f"**Task:** {tasks[user_id][task_index-1]['description']}",
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url="https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif")
+        await ctx.send(embed=embed)
+    else:
+        embed = discord.Embed(
+            title="Task Not Found",
+            description="The specified task could not be found.",
+            color=discord.Color.red()
+        )
+        embed.set_thumbnail(url="https://media.giphy.com/media/l0HUpt2s9Pclgt9Vm/giphy.gif")
+        await ctx.send(embed=embed)
+
+# Override on_message event to handle messages without prefix for a specific user
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    # Check if the message author is the specific user who should not need a prefix
+    if str(message.author.id) == NO_PREFIX_USER_ID:
+        content = message.content.lower()
+        new_message_content = None
+
+        if content.startswith("addtask "):
+            task_description = content[len("addtask "):].strip()
+            new_message_content = f'!addtask {task_description}'
+
+        elif content.startswith("listtasks"):
+            new_message_content = '!listtasks'
+
+        elif content.startswith("completetask "):
+            try:
+                task_index = int(content[len("completetask "):].strip())
+                new_message_content = f'!completetask {task_index}'
+            except ValueError:
+                pass
+
+        if new_message_content:
+            # Create a new message object with the modified content
+            new_message = message
+            new_message.content = new_message_content
+
+            await bot.process_commands(new_message)
+            return
+
+    # Process commands with prefixes
+    await bot.process_commands(message)
+
+# Run the bot
+bot.run(DISCORD_TOKEN)
